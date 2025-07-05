@@ -17,7 +17,7 @@ dependencies.
 ## Run
 
 Navigate to **trading-data-manager** directory and run the following command: <br>
-` ./gradlew bootRun`
+` ./gradlew bootRun` <br>
 The application will start on port `8080`
 
 ## Usage
