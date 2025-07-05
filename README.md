@@ -6,6 +6,10 @@ This repository contains a high-performance RESTful service designed to meet the
 The service consumes trading data and provides real-time statistical insights per symbol. 
 It leverages an efficient data structure optimized for rapid data insertion and low-latency retrieval of analytical results. <br>
 
+## System requirements
+
+Java 24 must be installed on the machine where this application is running
+
 ## Build
 
 To build **trading-data-manager** service application, run the following command. <br>
