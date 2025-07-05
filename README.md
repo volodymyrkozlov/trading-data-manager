@@ -62,7 +62,7 @@ Body: {
 ```
 
 ## Tests
-The repository includes test cases in `src/test/resources/spec` for verifying each type of calculation: average, last, maximum, minimum, and variance.
+The repository includes test cases in `src/test/resources` for verifying each type of calculation: average, last, maximum, minimum, and variance.
 These files can be modified to test custom input values if needed.
 
 
