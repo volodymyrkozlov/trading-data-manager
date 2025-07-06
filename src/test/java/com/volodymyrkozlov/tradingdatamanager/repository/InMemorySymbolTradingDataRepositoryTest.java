@@ -8,7 +8,7 @@ import static org.assertj.core.api.AssertionsForInterfaceTypes.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class InMemorySymbolTradingDataRepositoryTest {
-    private final InMemorySymbolTradingDataRepository repository = new InMemorySymbolTradingDataRepository(1, 2, 5);
+    private final InMemorySymbolTradingDataRepository repository = new InMemorySymbolTradingDataRepository(2, 2, 5);
 
     @Test
     void initiatesTradingData() {
@@ -91,10 +91,10 @@ class InMemorySymbolTradingDataRepositoryTest {
         repository.addSymbolTradingData("UAH", List.of(7.0));
 
         // when
-        var exception = assertThrows(IllegalStateException.class, () -> repository.addSymbolTradingData("UAH", List.of(7.0)));
+        var exception = assertThrows(IllegalStateException.class, () -> repository.addSymbolTradingData("USD", List.of(7.0)));
 
         // then
-        assertThat(exception.getMessage()).isEqualTo("Trading data symbol limit reached");
+        assertThat(exception.getMessage()).isEqualTo("Trading data symbol limit of 2 is reached");
     }
 
     @Test

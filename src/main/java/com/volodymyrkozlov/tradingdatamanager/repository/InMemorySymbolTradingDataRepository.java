@@ -12,45 +12,59 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedDeque;
 
 import static com.volodymyrkozlov.tradingdatamanager.repository.TradingDataEntity.tradingDataEntityBuilder;
 import static com.volodymyrkozlov.tradingdatamanager.utils.MathUtils.powerOfTen;
+import static java.util.stream.Collectors.toCollection;
+import static java.util.stream.Collectors.toConcurrentMap;
 import static java.util.stream.IntStream.of;
 import static java.util.stream.IntStream.rangeClosed;
 
 @Repository
 public class InMemorySymbolTradingDataRepository implements SymbolTradingDataRepository {
     private final Map<String, TradingDataEntity> symbolTradingPriceData = new ConcurrentHashMap<>();
-
-    private final Integer symbolsAllowedAmount;
-    private final Integer maxKValue;
-    private final Integer maxBatchSize;
+    private final Deque<TradingDataEntity> tradingDataPool;
+    private final int maxSymbolsAllowedAmount;
+    private final int maxKValue;
+    private final int maxBatchSize;
     private final int maxSymbolTradingDataCapacity;
 
-    public InMemorySymbolTradingDataRepository(@Value("${symbols-allowed-amount}") Integer symbolsAllowedAmount,
-                                               @Value("${max-k-value}") Integer maxKValue,
-                                               @Value("${max-batch-size}") Integer maxBatchSize) {
-        this.symbolsAllowedAmount = symbolsAllowedAmount;
+    public InMemorySymbolTradingDataRepository(@Value("${symbols-allowed-amount}") int maxSymbolsAllowedAmount,
+                                               @Value("${max-k-value}") int maxKValue,
+                                               @Value("${max-batch-size}") int maxBatchSize) {
         this.maxKValue = maxKValue;
         this.maxBatchSize = maxBatchSize;
+        this.maxSymbolsAllowedAmount = maxSymbolsAllowedAmount;
         this.maxSymbolTradingDataCapacity = powerOfTen(maxKValue);
+        this.tradingDataPool = rangeClosed(1, maxSymbolsAllowedAmount)
+                .mapToObj(__ -> initTradingData())
+                .collect(toCollection(ConcurrentLinkedDeque::new));
     }
 
     @Override
     public void addSymbolTradingData(String symbol,
                                      List<Double> prices) {
-        validateMaxSymbolAllowed();
         validateMaxBatchSize(prices);
 
-        symbolTradingPriceData.compute(symbol, (key, entity) -> {
-            if (entity == null) {
-                return initSymbolTradingPriceData(prices);
-            } else {
-                synchronized (entity) {
-                    updateSymbolTradingPriceData(prices, entity);
+        symbolTradingPriceData.compute(symbol, (key, tradingDataEntity) -> {
+            if (tradingDataEntity != null) {
+                synchronized (tradingDataEntity) {
+                    updateSymbolTradingPriceData(prices, tradingDataEntity);
                 }
-                return entity;
+                return tradingDataEntity;
             }
+
+            final var emptyTradingData = tradingDataPool.poll();
+            if (emptyTradingData == null) {
+                throw new IllegalStateException("Trading data symbol limit of %s is reached".formatted(maxSymbolsAllowedAmount));
+            }
+
+            synchronized (emptyTradingData) {
+                updateSymbolTradingPriceData(prices, emptyTradingData);
+            }
+
+            return emptyTradingData;
         });
     }
 
@@ -60,29 +74,43 @@ public class InMemorySymbolTradingDataRepository implements SymbolTradingDataRep
                 .orElseThrow(() -> new EntityNotFoundException("Trading price data is not found for %s".formatted(symbol)));
     }
 
-    private TradingDataEntity initSymbolTradingPriceData(List<Double> prices) {
+    private void updateSymbolTradingPriceData(List<Double> prices,
+                                              TradingDataEntity tradingData) {
+        final var tradingPrices = tradingData.tradingPrices();
+        final var prefixSums = tradingData.tradingPricesPrefixSums();
+        final var prefixSquares = tradingData.tradingPricesPrefixSquares();
+
+        final var sum = prefixSums.size() > 0 ? prefixSums.getByIndex(prefixSums.currentIndex()) : 0.0;
+        final var sumSq = prefixSums.size() > 0 ? prefixSquares.getByIndex(prefixSquares.currentIndex()) : 0.0;
+
+        addTradingData(prices, tradingPrices, prefixSums, prefixSquares, sum, sumSq);
+
+        final var lastIndex = tradingPrices.currentIndex();
+
+        rangeClosed(1, maxKValue).map(MathUtils::powerOfTen)
+                .forEach(k -> {
+                    final var maxDeque = tradingData.maxDequeues().get(k);
+                    final var minDeque = tradingData.minDequeues().get(k);
+
+                    for (var i = lastIndex - prices.size() + 1; i <= lastIndex; i++) {
+                        updateDeque(maxDeque, tradingPrices, i, k, true);
+                        updateDeque(minDeque, tradingPrices, i, k, false);
+                    }
+                });
+    }
+
+    private TradingDataEntity initTradingData() {
         final var tradingPrices = new DoubleRingBuffer(maxSymbolTradingDataCapacity);
         final var tradingPricesPrefixSums = new DoubleRingBuffer(maxSymbolTradingDataCapacity);
         final var tradingPricesPrefixSquares = new DoubleRingBuffer(maxSymbolTradingDataCapacity);
         final var maxDequeues = new HashMap<Integer, Deque<Integer>>();
         final var minDequeues = new HashMap<Integer, Deque<Integer>>();
 
-        addTradingData(prices, tradingPrices, tradingPricesPrefixSums, tradingPricesPrefixSquares, 0.0, 0.0);
-
-        final var lastIndex = tradingPrices.currentIndex();
         rangeClosed(1, maxKValue)
                 .map(MathUtils::powerOfTen)
                 .forEach(k -> {
-                    final var maxDeque = new ArrayDeque<Integer>();
-                    final var minDeque = new ArrayDeque<Integer>();
-
-                    for (var i = lastIndex - prices.size() + 1; i <= lastIndex; i++) {
-                        updateDeque(maxDeque, tradingPrices, i, k, true);
-                        updateDeque(minDeque, tradingPrices, i, k, false);
-                    }
-
-                    maxDequeues.put(k, maxDeque);
-                    minDequeues.put(k, minDeque);
+                    maxDequeues.put(k, new ArrayDeque<>());
+                    minDequeues.put(k, new ArrayDeque<>());
                 });
 
         return tradingDataEntityBuilder()
@@ -92,30 +120,6 @@ public class InMemorySymbolTradingDataRepository implements SymbolTradingDataRep
                 .maxDequeues(maxDequeues)
                 .minDequeues(minDequeues)
                 .build();
-    }
-
-    private void updateSymbolTradingPriceData(List<Double> prices,
-                                              TradingDataEntity tradingData) {
-        final var tradingPrices = tradingData.tradingPrices();
-        final var prefixSums = tradingData.tradingPricesPrefixSums();
-        final var prefixSquares = tradingData.tradingPricesPrefixSquares();
-
-        final var sum = prefixSums.getByIndex(prefixSums.currentIndex());
-        final var sumSq = prefixSquares.getByIndex(prefixSquares.currentIndex());
-
-        addTradingData(prices, tradingPrices, prefixSums, prefixSquares, sum, sumSq);
-
-        final var lastIndex = tradingPrices.currentIndex();
-
-        rangeClosed(1, maxKValue).map(MathUtils::powerOfTen).forEach(k -> {
-            final var maxDeque = tradingData.maxDequeues().get(k);
-            final var minDeque = tradingData.minDequeues().get(k);
-
-            for (var i = lastIndex - prices.size() + 1; i <= lastIndex; i++) {
-                updateDeque(maxDeque, tradingPrices, i, k, true);
-                updateDeque(minDeque, tradingPrices, i, k, false);
-            }
-        });
     }
 
     private static void addTradingData(List<Double> prices,
@@ -155,12 +159,6 @@ public class InMemorySymbolTradingDataRepository implements SymbolTradingDataRep
         }
 
         deque.addLast(currentIndex);
-    }
-
-    private void validateMaxSymbolAllowed() {
-        if (symbolTradingPriceData.size() > symbolsAllowedAmount) {
-            throw new IllegalStateException("Trading data symbol limit reached");
-        }
     }
 
     private void validateMaxBatchSize(Collection<Double> values) {
