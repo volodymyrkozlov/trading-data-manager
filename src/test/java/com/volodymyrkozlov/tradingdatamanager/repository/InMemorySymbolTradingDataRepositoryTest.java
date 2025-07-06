@@ -8,12 +8,12 @@ import static org.assertj.core.api.AssertionsForInterfaceTypes.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class InMemorySymbolTradingDataRepositoryTest {
-    private final InMemorySymbolTradingDataRepository repository = new InMemorySymbolTradingDataRepository(1, 2);
+    private final InMemorySymbolTradingDataRepository repository = new InMemorySymbolTradingDataRepository(1, 2, 5);
 
     @Test
     void initiatesTradingData() {
         // given
-        repository.addSymbolTradingData("PLN", 1.0);
+        repository.addSymbolTradingData("PLN", List.of(1.0));
 
         // when
         var tradingDataEntity = repository.getTradingData("PLN");
@@ -27,11 +27,11 @@ class InMemorySymbolTradingDataRepositoryTest {
     @Test
     void addsTradingData() {
         // given
-        repository.addSymbolTradingData("PLN", 5.0);
-        repository.addSymbolTradingData("PLN", 7.0);
-        repository.addSymbolTradingData("PLN", 20.0);
-        repository.addSymbolTradingData("PLN", 9.0);
-        repository.addSymbolTradingData("PLN", 8.0);
+        repository.addSymbolTradingData("PLN", List.of(5.0));
+        repository.addSymbolTradingData("PLN",  List.of(7.0));
+        repository.addSymbolTradingData("PLN",  List.of(20.0));
+        repository.addSymbolTradingData("PLN",  List.of(9.0));
+        repository.addSymbolTradingData("PLN",  List.of(8.0));
 
         // when
         var tradingDataEntity = repository.getTradingData("PLN");
@@ -49,13 +49,22 @@ class InMemorySymbolTradingDataRepositoryTest {
     @Test
     void throwsExceptionIfSymbolsLimitIsReached() {
         // given
-        repository.addSymbolTradingData("PLN", 5.0);
-        repository.addSymbolTradingData("UAH", 7.0);
+        repository.addSymbolTradingData("PLN",  List.of(5.0));
+        repository.addSymbolTradingData("UAH", List.of(7.0));
 
         // when
-        var exception = assertThrows(IllegalStateException.class, () -> repository.addSymbolTradingData("UAH", 7.0));
+        var exception = assertThrows(IllegalStateException.class, () -> repository.addSymbolTradingData("UAH", List.of(7.0)));
 
         // then
         assertThat(exception.getMessage()).isEqualTo("Trading data symbol limit reached");
+    }
+
+    @Test
+    void throwsExceptionIfBatchSizeExceeded() {
+        // when
+        var exception = assertThrows(IllegalArgumentException.class, () -> repository.addSymbolTradingData("PLN", List.of(1.0, 2.0, 3.0, 4.0, 5.0, 6.0)));
+
+        // then
+        assertThat(exception.getMessage()).isEqualTo("Batch size 6 is greater than allowed 5");
     }
 }

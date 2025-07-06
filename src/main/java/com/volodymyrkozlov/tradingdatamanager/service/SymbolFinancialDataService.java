@@ -5,7 +5,7 @@ import com.volodymyrkozlov.tradingdatamanager.repository.SymbolTradingDataReposi
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-import java.util.Collection;
+import java.util.List;
 
 import static com.volodymyrkozlov.tradingdatamanager.dto.FinancialDataResponse.financialDataResponseBuilder;
 import static com.volodymyrkozlov.tradingdatamanager.service.SymbolFinancialDataAnalyzer.averageTradingPrice;
@@ -19,20 +19,16 @@ import static com.volodymyrkozlov.tradingdatamanager.utils.MathUtils.powerOfTen;
 public class SymbolFinancialDataService {
     private final SymbolTradingDataRepository repository;
     private final Integer maxKValue;
-    private final Integer maxBatchSize;
 
     public SymbolFinancialDataService(SymbolTradingDataRepository repository,
-                                      @Value("${max-k-value}") Integer maxKValue,
-                                      @Value("${max-batch-size}") Integer maxBatchSize) {
+                                      @Value("${max-k-value}") Integer maxKValue) {
         this.repository = repository;
         this.maxKValue = maxKValue;
-        this.maxBatchSize = maxBatchSize;
     }
 
     public void addFinancialData(String symbol,
-                                 Collection<Double> symbolTradingPrices) {
-        validateMaxBatchSize(symbolTradingPrices);
-        symbolTradingPrices.forEach(price -> repository.addSymbolTradingData(symbol, price));
+                                 List<Double> symbolTradingPrices) {
+        repository.addSymbolTradingData(symbol, symbolTradingPrices);
     }
 
     public FinancialDataResponse getFinancialData(String symbol,
@@ -55,12 +51,6 @@ public class SymbolFinancialDataService {
                 .min(minTradingPrice(tradingPrices, minDequeues, analyzePoints))
                 .var(varianceTradingPrice(tradingPrices, tradingPricesPrefixSums, tradingPricesPrefixSquares, analyzePoints))
                 .build();
-    }
-
-    private void validateMaxBatchSize(Collection<Double> values) {
-        if (values.size() > maxBatchSize) {
-            throw new IllegalArgumentException("Batch size %s is greater than allowed %s".formatted(values.size(), maxBatchSize));
-        }
     }
 
     private void validateMaxKValue(int k) {

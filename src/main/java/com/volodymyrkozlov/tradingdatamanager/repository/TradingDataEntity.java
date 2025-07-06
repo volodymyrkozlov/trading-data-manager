@@ -45,12 +45,12 @@ public record TradingDataEntity(List<Double> tradingPrices,
             return this;
         }
 
-        public Builder maxDeque(Map<Integer, Deque<Integer>> maxDequeues) {
+        public Builder maxDequeues(Map<Integer, Deque<Integer>> maxDequeues) {
             this.maxDequeues = maxDequeues;
             return this;
         }
 
-        public Builder minDeque(Map<Integer, Deque<Integer>> minDequeues) {
+        public Builder minDequeues(Map<Integer, Deque<Integer>> minDequeues) {
             this.minDequeues = minDequeues;
             return this;
         }

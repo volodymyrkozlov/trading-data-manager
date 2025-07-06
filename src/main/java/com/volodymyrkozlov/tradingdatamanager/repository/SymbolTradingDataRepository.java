@@ -1,9 +1,11 @@
 package com.volodymyrkozlov.tradingdatamanager.repository;
 
+import java.util.List;
+
 public interface SymbolTradingDataRepository {
 
     void addSymbolTradingData(String symbol,
-                              Double price);
+                              List<Double> prices);
 
     TradingDataEntity getTradingData(String symbol);
 }

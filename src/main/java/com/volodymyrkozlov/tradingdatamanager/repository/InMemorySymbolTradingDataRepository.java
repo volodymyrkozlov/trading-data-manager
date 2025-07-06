@@ -6,6 +6,7 @@ import org.springframework.stereotype.Repository;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.List;
@@ -22,94 +23,80 @@ public class InMemorySymbolTradingDataRepository implements SymbolTradingDataRep
 
     private final Integer symbolsAllowedAmount;
     private final Integer maxKValue;
+    private final Integer maxBatchSize;
+
 
     public InMemorySymbolTradingDataRepository(@Value("${symbols-allowed-amount}") Integer symbolsAllowedAmount,
-                                               @Value("${max-k-value}") Integer maxKValue) {
+                                               @Value("${max-k-value}") Integer maxKValue,
+                                               @Value("${max-batch-size}") Integer maxBatchSize) {
         this.symbolsAllowedAmount = symbolsAllowedAmount;
         this.maxKValue = maxKValue;
+        this.maxBatchSize = maxBatchSize;
     }
 
-    /**
-     * Time complexity is O(k) for both initialization and update, where the maximum value of k is 8. Since 8 is a small and fixed number, this can be treated as O(1).
-     * Space complexity is for initialization O(k) where the maximum value of k is 8. Since 8 is a small and fixed number, this can be treated as O(1).
-     * Space complexity is O(1) for update.
-     */
     @Override
     public void addSymbolTradingData(String symbol,
-                                     Double price) {
-        if (symbolTradingPriceData.size() > symbolsAllowedAmount) {
-            throw new IllegalStateException("Trading data symbol limit reached");
-        }
+                                     List<Double> prices) {
+        validateMaxSymbolAllowed();
+        validateMaxBatchSize(prices);
 
         Optional.ofNullable(symbolTradingPriceData.get(symbol))
                 .ifPresentOrElse(
-                        tradingData -> updateSymbolTradingPriceData(price, tradingData),
-                        () -> initSymbolTradingPriceData(symbol, price));
+                        tradingData -> updateSymbolTradingPriceData(prices, tradingData),
+                        () -> initSymbolTradingPriceData(symbol, prices));
     }
 
-    /**
-     * Time complexity is O(1).
-     * Space complexity is O(1).
-     */
     @Override
     public TradingDataEntity getTradingData(String symbol) {
         return Optional.ofNullable(symbolTradingPriceData.get(symbol))
                 .orElseThrow(() -> new EntityNotFoundException("Trading price data is not found for %s".formatted(symbol)));
     }
 
-    /**
-     * Time complexity is O(k) where the maximum value of k is 8. Since 8 is a small and fixed number, this can be treated as O(1).
-     * Space complexity is O(k) where the maximum value of k is 8. Since 8 is a small and fixed number, this can be treated as O(1).
-     */
     private void initSymbolTradingPriceData(String symbol,
-                                            Double price) {
+                                            List<Double> prices) {
         final var tradingPrices = new ArrayList<Double>();
         final var tradingPricesPrefixSums = new ArrayList<Double>();
         final var tradingPricesPrefixSquares = new ArrayList<Double>();
         final var maxDequeues = new HashMap<Integer, Deque<Integer>>();
         final var minDequeues = new HashMap<Integer, Deque<Integer>>();
 
-        tradingPrices.add(price);
-        tradingPricesPrefixSums.add(price);
-        tradingPricesPrefixSquares.add(price * price);
+        addTradingPricingData(prices, tradingPrices, tradingPricesPrefixSums, tradingPricesPrefixSquares, 0.0, 0.0);
 
         rangeClosed(1, maxKValue)
                 .map(MathUtils::powerOfTen)
                 .forEach(k -> {
-                    final var indexMaxDeque = new ArrayDeque<Integer>();
-                    final var indexMinDeque = new ArrayDeque<Integer>();
+                    final var maxDeque = new ArrayDeque<Integer>();
+                    final var minDeque = new ArrayDeque<Integer>();
 
-                    indexMaxDeque.add(0);
-                    indexMinDeque.add(0);
+                    for (var i = 0; i < prices.size(); i++) {
+                        initDeque(maxDeque, prices, i, k, true);
+                        initDeque(minDeque, prices, i, k, false);
+                    }
 
-                    maxDequeues.put(k, indexMaxDeque);
-                    minDequeues.put(k, indexMinDeque);
+                    maxDequeues.put(k, maxDeque);
+                    minDequeues.put(k, minDeque);
                 });
 
         symbolTradingPriceData.put(symbol, tradingDataEntityBuilder()
                 .tradingPrices(tradingPrices)
                 .tradingPricesPrefixSums(tradingPricesPrefixSums)
                 .tradingPricesPrefixSquares(tradingPricesPrefixSquares)
-                .maxDeque(maxDequeues)
-                .minDeque(minDequeues)
+                .maxDequeues(maxDequeues)
+                .minDequeues(minDequeues)
                 .build());
     }
 
-    /**
-     * Time complexity is O(k) where the maximum value of k is 8. Since 8 is a small and fixed number, this can be treated as O(1).
-     * Space complexity is O(1).
-     */
-    private void updateSymbolTradingPriceData(Double price,
+    private void updateSymbolTradingPriceData(List<Double> prices,
                                               TradingDataEntity tradingData) {
         final var tradingPrices = tradingData.tradingPrices();
-        final var index = tradingPrices.size();
-        tradingPrices.add(price);
-
         final var tradingPricesPrefixSums = tradingData.tradingPricesPrefixSums();
-        tradingPricesPrefixSums.add(tradingPricesPrefixSums.getLast() + price);
-
         final var tradingPricesPrefixSquares = tradingData.tradingPricesPrefixSquares();
-        tradingPricesPrefixSquares.add(tradingPricesPrefixSquares.getLast() + price * price);
+
+        final var startIndex = tradingPrices.size();
+
+        var lastSum = tradingPricesPrefixSums.getLast();
+        var lastSqSum = tradingPricesPrefixSquares.getLast();
+        addTradingPricingData(prices, tradingPrices, tradingPricesPrefixSums, tradingPricesPrefixSquares, lastSum, lastSqSum);
 
         rangeClosed(1, maxKValue)
                 .map(MathUtils::powerOfTen)
@@ -117,18 +104,54 @@ public class InMemorySymbolTradingDataRepository implements SymbolTradingDataRep
                     final var maxDeque = tradingData.maxDequeues().get(k);
                     final var minDeque = tradingData.minDequeues().get(k);
 
-                    updateDeque(maxDeque, tradingPrices, price, index, k, true);
-                    updateDeque(minDeque, tradingPrices, price, index, k, false);
+                    for (var i = 0; i < prices.size(); i++) {
+                        final var index = startIndex + i;
+                        updateDeque(maxDeque, tradingPrices, prices.get(i), index, k, true);
+                        updateDeque(minDeque, tradingPrices, prices.get(i), index, k, false);
+                    }
                 });
+    }
+
+    private static void addTradingPricingData(List<Double> prices,
+                                              List<Double> tradingPrices,
+                                              List<Double> tradingPricesPrefixSums,
+                                              List<Double> tradingPricesPrefixSquares,
+                                              double sum,
+                                              double sumSq) {
+        for (final var price : prices) {
+            tradingPrices.add(price);
+            sum += price;
+            sumSq += price * price;
+            tradingPricesPrefixSums.add(sum);
+            tradingPricesPrefixSquares.add(sumSq);
+        }
+    }
+
+    private static void initDeque(Deque<Integer> deque,
+                                  List<Double> prices,
+                                  int currentIndex,
+                                  int k,
+                                  boolean isMax) {
+        while (!deque.isEmpty() && deque.peekFirst() <= currentIndex - k) {
+            deque.pollFirst();
+        }
+
+        while (!deque.isEmpty() &&
+                ((isMax && prices.get(deque.peekLast()) <= prices.get(currentIndex)) ||
+                        (!isMax && prices.get(deque.peekLast()) >= prices.get(currentIndex)))) {
+            deque.pollLast();
+        }
+
+        deque.addLast(currentIndex);
     }
 
     private static void updateDeque(Deque<Integer> deque,
                                     List<Double> prices,
                                     double price,
-                                    int index,
+                                    int currentIndex,
                                     int k,
                                     boolean isMax) {
-        while (!deque.isEmpty() && deque.peekFirst() <= index - k) {
+        while (!deque.isEmpty() && deque.peekFirst() <= currentIndex - k) {
             deque.pollFirst();
         }
 
@@ -137,6 +160,18 @@ public class InMemorySymbolTradingDataRepository implements SymbolTradingDataRep
             deque.pollLast();
         }
 
-        deque.addLast(index);
+        deque.addLast(currentIndex);
+    }
+
+    private void validateMaxSymbolAllowed() {
+        if (symbolTradingPriceData.size() > symbolsAllowedAmount) {
+            throw new IllegalStateException("Trading data symbol limit reached");
+        }
+    }
+
+    private void validateMaxBatchSize(Collection<Double> values) {
+        if (values.size() > maxBatchSize) {
+            throw new IllegalArgumentException("Batch size %s is greater than allowed %s".formatted(values.size(), maxBatchSize));
+        }
     }
 }

@@ -11,6 +11,12 @@ import static org.springframework.http.HttpStatus.NOT_FOUND;
 @ControllerAdvice
 public class ExceptionHandlingController {
 
+    @ExceptionHandler(IllegalStateException.class)
+    public ResponseEntity<ResponseError> handle(IllegalStateException ex) {
+        return ResponseEntity.status(BAD_REQUEST)
+                .body(new ResponseError(ex.getMessage()));
+    }
+
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ResponseError> handle(IllegalArgumentException ex) {
         return ResponseEntity.status(BAD_REQUEST)
