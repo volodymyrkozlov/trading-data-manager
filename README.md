@@ -8,7 +8,14 @@ It leverages an efficient data structure optimized for rapid data insertion and 
 
 ## System requirements
 
-Java 24 must be installed on the machine where this application is running
+1. Java 24 must be installed on the machine where this application is running.
+2. Memory requirements: 
+- The application uses double ring buffers to store trading prices, their prefix sums, and squared prefix sums. <br>
+Since the maximum value of K is 8 and each double occupies 8 bytes, approximately 800 MB is expected per buffer according to formula 1e8 * 8 bytes = 800 MB. 800 MB * 3 = 2400 MB. <br>
+- The application uses 2 dequeues of indices to calculate max and min values. <br>
+Since the maximum value of K is 8, 8 `k` values * 2 = 16 dequeues per symbol and each int occupies 4 bytes, 0.5MB is expected per symbol. <br>
+Total per symbol is 2.4 GB. <br>
+Since max 10 symbols are allowed, the expected memory allocation is 2.4GB * 10 = 24GB
 
 ## Build
 
@@ -17,6 +24,10 @@ To build **trading-data-manager** service application, run the following command
 
 *It will run unit tests and install*
 dependencies.
+
+*Note:*
+Gradle properties already contain required configurations. If more memory is required run as `./gradlew bootRun -Dorg.gradle.jvmargs="-Xms4g -Xmx26g -XX:+HeapDumpOnOutOfMemoryError"`
+
 
 ## Run
 

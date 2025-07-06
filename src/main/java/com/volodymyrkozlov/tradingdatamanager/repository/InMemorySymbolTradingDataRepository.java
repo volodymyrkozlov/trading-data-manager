@@ -44,7 +44,7 @@ public class InMemorySymbolTradingDataRepository implements SymbolTradingDataRep
 
         symbolTradingPriceData.compute(symbol, (key, entity) -> {
             if (entity == null) {
-                return initSymbolTradingPriceData(symbol, prices);
+                return initSymbolTradingPriceData(prices);
             } else {
                 synchronized (entity) {
                     updateSymbolTradingPriceData(prices, entity);
@@ -60,8 +60,7 @@ public class InMemorySymbolTradingDataRepository implements SymbolTradingDataRep
                 .orElseThrow(() -> new EntityNotFoundException("Trading price data is not found for %s".formatted(symbol)));
     }
 
-    private TradingDataEntity initSymbolTradingPriceData(String symbol,
-                                                         List<Double> prices) {
+    private TradingDataEntity initSymbolTradingPriceData(List<Double> prices) {
         final var tradingPrices = new DoubleRingBuffer(maxSymbolTradingDataCapacity);
         final var tradingPricesPrefixSums = new DoubleRingBuffer(maxSymbolTradingDataCapacity);
         final var tradingPricesPrefixSquares = new DoubleRingBuffer(maxSymbolTradingDataCapacity);
