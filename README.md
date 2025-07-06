@@ -8,14 +8,16 @@ It leverages an efficient data structure optimized for rapid data insertion and 
 
 ## System requirements
 
-1. Java 24 must be installed on the machine where this application is running.
-2. Memory requirements: 
-- The application uses double ring buffers to store trading prices, their prefix sums, and squared prefix sums. <br>
-Since the maximum value of K is 8 and each double occupies 8 bytes, approximately 800 MB is expected per buffer according to formula 1e8 * 8 bytes = 800 MB. 800 MB * 3 = 2400 MB. <br>
-- The application uses 2 dequeues of indices to calculate max and min values. <br>
-Since the maximum value of K is 8, 8 `k` values * 2 = 16 dequeues per symbol and each int occupies 4 bytes, 0.5MB is expected per symbol. <br>
-Total per symbol is 2.4 GB. <br>
-Since max 10 symbols are allowed, the expected memory allocation is 2.4GB * 10 = 24GB
+1. Java `24` must be installed on the machine where this application is running.
+2. Memory requirements:
+- The application uses `double` ring buffers to store trading prices, their prefix sums, and squared prefix sums. <br>
+The default maximum value of `K` is `8` and each `double` occupies `8 bytes`, approximately `800 MB` is expected per buffer according to formula `1e8 * 8 bytes = 800 MB`. `800 MB * 3 = 2400 MB`. <br>
+- The application uses `2` dequeues of indices to calculate max and min values. <br>
+The default maximum value of `K` is `8`, `8 k values * 2 = 16` dequeues per symbol and each int occupies `4 bytes`, `0.5MB` is expected per symbol. <br>
+
+Total per symbol is `2.4 GB`. <br>
+
+By default `10` symbols are allowed, the expected memory allocation is `2.4GB * 10 = 24GB`
 
 ## Build
 
@@ -35,6 +37,11 @@ Navigate to **trading-data-manager** directory and run the following command: <b
 ` ./gradlew bootRun` <br>
 
 *The application will start on port `8080`*
+
+Application properties:
+- max-symbols-allowed-amount - *An amount of symbols allowed for the application. Default `10`*
+- max-k-value - *Max K value. Default `8`*
+- max-batch-size - *Max batch size. Default `10000`*
 
 ## Usage
 

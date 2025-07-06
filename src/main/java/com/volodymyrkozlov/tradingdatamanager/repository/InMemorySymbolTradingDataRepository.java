@@ -30,7 +30,7 @@ public class InMemorySymbolTradingDataRepository implements SymbolTradingDataRep
     private final int maxBatchSize;
     private final int maxSymbolTradingDataCapacity;
 
-    public InMemorySymbolTradingDataRepository(@Value("${symbols-allowed-amount}") int maxSymbolsAllowedAmount,
+    public InMemorySymbolTradingDataRepository(@Value("${max-symbols-allowed-amount}") int maxSymbolsAllowedAmount,
                                                @Value("${max-k-value}") int maxKValue,
                                                @Value("${max-batch-size}") int maxBatchSize) {
         this.maxKValue = maxKValue;
