@@ -1,14 +1,13 @@
 package com.volodymyrkozlov.tradingdatamanager.repository;
 
 import java.util.Deque;
-import java.util.List;
 import java.util.Map;
 
 import static com.volodymyrkozlov.tradingdatamanager.utils.ValidationUtils.validateRequired;
 
-public record TradingDataEntity(List<Double> tradingPrices,
-                                List<Double> tradingPricesPrefixSums,
-                                List<Double> tradingPricesPrefixSquares,
+public record TradingDataEntity(DoubleRingBuffer tradingPrices,
+                                DoubleRingBuffer tradingPricesPrefixSums,
+                                DoubleRingBuffer tradingPricesPrefixSquares,
                                 Map<Integer, Deque<Integer>> maxDequeues,
                                 Map<Integer, Deque<Integer>> minDequeues) {
     public TradingDataEntity {
@@ -24,23 +23,23 @@ public record TradingDataEntity(List<Double> tradingPrices,
     }
 
     public static class Builder {
-        private List<Double> tradingPrices;
-        private List<Double> tradingPricesPrefixSums;
-        private List<Double> tradingPricesPrefixSquares;
+        private DoubleRingBuffer tradingPrices;
+        private DoubleRingBuffer tradingPricesPrefixSums;
+        private DoubleRingBuffer tradingPricesPrefixSquares;
         private Map<Integer, Deque<Integer>> maxDequeues;
         private Map<Integer, Deque<Integer>> minDequeues;
 
-        public Builder tradingPrices(List<Double> tradingPrices) {
+        public Builder tradingPrices(DoubleRingBuffer tradingPrices) {
             this.tradingPrices = tradingPrices;
             return this;
         }
 
-        public Builder tradingPricesPrefixSums(List<Double> tradingPricesPrefixSums) {
+        public Builder tradingPricesPrefixSums(DoubleRingBuffer tradingPricesPrefixSums) {
             this.tradingPricesPrefixSums = tradingPricesPrefixSums;
             return this;
         }
 
-        public Builder tradingPricesPrefixSquares(List<Double> tradingPricesPrefixSquares) {
+        public Builder tradingPricesPrefixSquares(DoubleRingBuffer tradingPricesPrefixSquares) {
             this.tradingPricesPrefixSquares = tradingPricesPrefixSquares;
             return this;
         }

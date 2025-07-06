@@ -46,7 +46,7 @@ public class SymbolFinancialDataService {
 
         return financialDataResponseBuilder()
                 .last(lastTradingPrice(tradingPrices))
-                .avg(averageTradingPrice(tradingPrices, tradingPricesPrefixSums, analyzePoints))
+                .avg(averageTradingPrice(tradingPricesPrefixSums, analyzePoints))
                 .max(maxTradingPrice(tradingPrices, maxDequeues, analyzePoints))
                 .min(minTradingPrice(tradingPrices, minDequeues, analyzePoints))
                 .var(varianceTradingPrice(tradingPrices, tradingPricesPrefixSums, tradingPricesPrefixSquares, analyzePoints))

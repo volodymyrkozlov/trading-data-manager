@@ -1,94 +1,93 @@
 package com.volodymyrkozlov.tradingdatamanager.service;
 
+import com.volodymyrkozlov.tradingdatamanager.repository.DoubleRingBuffer;
+
 import java.util.Arrays;
 import java.util.Deque;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-import static java.lang.Math.min;
-
 class SymbolFinancialDataAnalyzer {
 
-    /**
-     * Time complexity is O(1).
-     * Space complexity is O(1).
-     */
-    static double lastTradingPrice(List<Double> tradingPrices) {
-        validateNotEmpty(tradingPrices);
-
-        return tradingPrices.getLast();
+    static double lastTradingPrice(DoubleRingBuffer tradingPrices) {
+        validateNotNull(tradingPrices);
+        return tradingPrices.getByIndex(tradingPrices.currentIndex());
     }
 
-    /**
-     * Time complexity is O(1).
-     * Space complexity is O(1).
-     */
-    static double averageTradingPrice(List<Double> tradingPrices,
-                                      List<Double> tradingPricesPrefixSums,
+    static double averageTradingPrice(DoubleRingBuffer tradingPricesPrefixSums,
                                       int k) {
-        validateNotEmpty(tradingPrices, tradingPricesPrefixSums);
-        validateSameSize(tradingPrices, tradingPricesPrefixSums);
+        validateNotNull(tradingPricesPrefixSums);
+
+        final var end = tradingPricesPrefixSums.currentIndex();
         final var size = tradingPricesPrefixSums.size();
-        final var elementsAnalyze = min(tradingPricesPrefixSums.size(), k);
+        final var elements = Math.min(k, size);
+        final var start = end - elements + 1;
 
-        final var lastIndex = size - 1;
-        final var firstIndex = size - elementsAnalyze;
+        final var total = tradingPricesPrefixSums.getByIndex(end);
+        final var excluded = (start > 0) ? tradingPricesPrefixSums.getByIndex(start - 1) : 0.0;
 
-        final var total = tradingPricesPrefixSums.get(lastIndex);
-        final var excluded = (firstIndex > 0) ? tradingPricesPrefixSums.get(firstIndex - 1) : 0.0;
-
-        return (total - excluded) / elementsAnalyze;
+        return (total - excluded) / elements;
     }
 
-    /**
-     * Time complexity is O(1).
-     * Space complexity is O(1).
-     */
-    static double varianceTradingPrice(List<Double> tradingPrices,
-                                       List<Double> tradingPricesPrefixSums,
-                                       List<Double> tradingPricesPrefixSquares,
+    static double varianceTradingPrice(DoubleRingBuffer tradingPrices,
+                                       DoubleRingBuffer tradingPricesPrefixSums,
+                                       DoubleRingBuffer tradingPricesPrefixSquares,
                                        int k) {
-        validateNotEmpty(tradingPrices, tradingPricesPrefixSums, tradingPricesPrefixSquares);
+        validateNotNull(tradingPrices);
+        validateNotNull(tradingPricesPrefixSums);
+        validateNotNull(tradingPricesPrefixSquares);
+
         validateSameSize(tradingPrices, tradingPricesPrefixSums, tradingPricesPrefixSquares);
+
+        final var end = tradingPrices.currentIndex();
         final var size = tradingPrices.size();
-        final var elementsAnalyze = min(tradingPrices.size(), k);
+        final var elements = Math.min(k, size);
+        final var start = end - elements + 1;
 
-        if (elementsAnalyze == 1) {
-            return 0.0;
+        if (elements == 1) return 0.0;
+
+        var sum = tradingPricesPrefixSums.getByIndex(end);
+        var sumSq = tradingPricesPrefixSquares.getByIndex(end);
+
+        if (start > 0) {
+            sum -= tradingPricesPrefixSums.getByIndex(start - 1);
+            sumSq -= tradingPricesPrefixSquares.getByIndex(start - 1);
         }
 
-        var sum = tradingPricesPrefixSums.get(size - 1);
-        var sumSq = tradingPricesPrefixSquares.get(size - 1);
-
-        if (size - elementsAnalyze - 1 >= 0) {
-            sum -= tradingPricesPrefixSums.get(size - elementsAnalyze - 1);
-            sumSq -= tradingPricesPrefixSquares.get(size - elementsAnalyze - 1);
-        }
-
-        return elementsAnalyze == tradingPrices.size()
-                ? populationVariance(sumSq, sum, elementsAnalyze)
-                : sampleVariance(sumSq, sum, elementsAnalyze);
+        return (elements == size)
+                ? populationVariance(sumSq, sum, elements)
+                : sampleVariance(sumSq, sum, elements);
     }
 
-    /**
-     * Time complexity is O(1).
-     * Space complexity is O(1).
-     */
-    static double minTradingPrice(List<Double> tradingPrices,
+    static double minTradingPrice(DoubleRingBuffer prices,
                                   Map<Integer, Deque<Integer>> minDequeues,
                                   int k) {
-        return resolveDequeStats(tradingPrices, minDequeues, k);
+        return resolveDequeStats(prices, minDequeues, k);
     }
 
-    /**
-     * Time complexity is O(1).
-     * Space complexity is O(1).
-     */
-    static double maxTradingPrice(List<Double> tradingPrices,
+    static double maxTradingPrice(DoubleRingBuffer prices,
                                   Map<Integer, Deque<Integer>> maxDequeues,
                                   int k) {
-        return resolveDequeStats(tradingPrices, maxDequeues, k);
+        return resolveDequeStats(prices, maxDequeues, k);
+    }
+
+    private static double resolveDequeStats(DoubleRingBuffer prices,
+                                            Map<Integer, Deque<Integer>> dequeues,
+                                            int k) {
+        final var deque = Optional.ofNullable(dequeues.get(k))
+                .orElseThrow(() -> new IllegalArgumentException("Dequeues don't contain provided K %s".formatted(k)));
+
+        if (deque.isEmpty()) {
+            throw new IllegalArgumentException("Deque for K %s doesn't contain any data".formatted(k));
+        }
+
+        final var index = deque.peekFirst();
+
+        try {
+            return prices.getByIndex(index);
+        } catch (IndexOutOfBoundsException e) {
+            throw new IllegalArgumentException("Trading prices don't contain index %s from deque".formatted(index));
+        }
     }
 
     private static double sampleVariance(Double sumSq,
@@ -104,35 +103,14 @@ class SymbolFinancialDataAnalyzer {
         return (sumSq / elementsAnalyze) - (mean * mean);
     }
 
-
-    private static double resolveDequeStats(List<Double> tradingPrices,
-                                            Map<Integer, Deque<Integer>> dequeues,
-                                            int k) {
-        validateNotEmpty(tradingPrices);
-        final var deque = Optional.ofNullable(dequeues.get(k))
-                .orElseThrow(() -> new IllegalArgumentException("Dequeues don't contain provided K %s".formatted(k)));
-
-        if (deque.isEmpty()) {
-            throw new IllegalArgumentException("Deque for K %s doesn't contain any data".formatted(k));
-        }
-
-        final var index = deque.peekFirst();
-
-        try {
-            return tradingPrices.get(index);
-        } catch (IndexOutOfBoundsException e) {
-            throw new IllegalArgumentException("Trading prices don't contain index %s from deque".formatted(index));
+    private static void validateNotNull(DoubleRingBuffer doubleRingBuffer) {
+        if (doubleRingBuffer == null) {
+            throw new IllegalArgumentException("Trading data cannot be null");
         }
     }
 
-    private static void validateNotEmpty(List<Double>... tradingPrices) {
-        if (Arrays.stream(tradingPrices).anyMatch(collection -> collection == null || collection.isEmpty())) {
-            throw new IllegalArgumentException("Trading prices don't contain at least one data");
-        }
-    }
-
-    private static void validateSameSize(List<Double>... tradingPrices) {
-        if (Arrays.stream(tradingPrices).map(List::size).distinct().count() != 1) {
+    private static void validateSameSize(DoubleRingBuffer... tradingPrices) {
+        if (Arrays.stream(tradingPrices).map(DoubleRingBuffer::size).distinct().count() != 1) {
             throw new IllegalArgumentException("Trading prices collections must have the same size");
         }
     }

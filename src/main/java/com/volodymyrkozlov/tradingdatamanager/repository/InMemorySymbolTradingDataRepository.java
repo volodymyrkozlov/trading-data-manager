@@ -5,7 +5,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Repository;
 
 import java.util.ArrayDeque;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Deque;
 import java.util.HashMap;
@@ -15,6 +14,8 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 import static com.volodymyrkozlov.tradingdatamanager.repository.TradingDataEntity.tradingDataEntityBuilder;
+import static com.volodymyrkozlov.tradingdatamanager.utils.MathUtils.powerOfTen;
+import static java.util.stream.IntStream.of;
 import static java.util.stream.IntStream.rangeClosed;
 
 @Repository
@@ -24,7 +25,7 @@ public class InMemorySymbolTradingDataRepository implements SymbolTradingDataRep
     private final Integer symbolsAllowedAmount;
     private final Integer maxKValue;
     private final Integer maxBatchSize;
-
+    private final int maxSymbolTradingDataCapacity;
 
     public InMemorySymbolTradingDataRepository(@Value("${symbols-allowed-amount}") Integer symbolsAllowedAmount,
                                                @Value("${max-k-value}") Integer maxKValue,
@@ -32,6 +33,7 @@ public class InMemorySymbolTradingDataRepository implements SymbolTradingDataRep
         this.symbolsAllowedAmount = symbolsAllowedAmount;
         this.maxKValue = maxKValue;
         this.maxBatchSize = maxBatchSize;
+        this.maxSymbolTradingDataCapacity = powerOfTen(maxKValue);
     }
 
     @Override
@@ -40,10 +42,16 @@ public class InMemorySymbolTradingDataRepository implements SymbolTradingDataRep
         validateMaxSymbolAllowed();
         validateMaxBatchSize(prices);
 
-        Optional.ofNullable(symbolTradingPriceData.get(symbol))
-                .ifPresentOrElse(
-                        tradingData -> updateSymbolTradingPriceData(prices, tradingData),
-                        () -> initSymbolTradingPriceData(symbol, prices));
+        symbolTradingPriceData.compute(symbol, (key, entity) -> {
+            if (entity == null) {
+                return initSymbolTradingPriceData(symbol, prices);
+            } else {
+                synchronized (entity) {
+                    updateSymbolTradingPriceData(prices, entity);
+                }
+            }
+            return entity;
+        });
     }
 
     @Override
@@ -52,115 +60,104 @@ public class InMemorySymbolTradingDataRepository implements SymbolTradingDataRep
                 .orElseThrow(() -> new EntityNotFoundException("Trading price data is not found for %s".formatted(symbol)));
     }
 
-    private void initSymbolTradingPriceData(String symbol,
-                                            List<Double> prices) {
-        final var tradingPrices = new ArrayList<Double>();
-        final var tradingPricesPrefixSums = new ArrayList<Double>();
-        final var tradingPricesPrefixSquares = new ArrayList<Double>();
+    private TradingDataEntity initSymbolTradingPriceData(String symbol,
+                                                         List<Double> prices) {
+        final var tradingPrices = new DoubleRingBuffer(maxSymbolTradingDataCapacity);
+        final var tradingPricesPrefixSums = new DoubleRingBuffer(maxSymbolTradingDataCapacity);
+        final var tradingPricesPrefixSquares = new DoubleRingBuffer(maxSymbolTradingDataCapacity);
         final var maxDequeues = new HashMap<Integer, Deque<Integer>>();
         final var minDequeues = new HashMap<Integer, Deque<Integer>>();
 
-        addTradingPricingData(prices, tradingPrices, tradingPricesPrefixSums, tradingPricesPrefixSquares, 0.0, 0.0);
+        addTradingData(prices, tradingPrices, tradingPricesPrefixSums, tradingPricesPrefixSquares, 0.0, 0.0);
 
+        final var lastIndex = tradingPrices.currentIndex();
         rangeClosed(1, maxKValue)
                 .map(MathUtils::powerOfTen)
                 .forEach(k -> {
                     final var maxDeque = new ArrayDeque<Integer>();
                     final var minDeque = new ArrayDeque<Integer>();
 
-                    for (var i = 0; i < prices.size(); i++) {
-                        initDeque(maxDeque, prices, i, k, true);
-                        initDeque(minDeque, prices, i, k, false);
+                    for (var i = lastIndex - prices.size() + 1; i <= lastIndex; i++) {
+                        updateDeque(maxDeque, tradingPrices, i, k, true);
+                        updateDeque(minDeque, tradingPrices, i, k, false);
                     }
 
                     maxDequeues.put(k, maxDeque);
                     minDequeues.put(k, minDeque);
                 });
 
-        symbolTradingPriceData.put(symbol, tradingDataEntityBuilder()
+        return tradingDataEntityBuilder()
                 .tradingPrices(tradingPrices)
                 .tradingPricesPrefixSums(tradingPricesPrefixSums)
                 .tradingPricesPrefixSquares(tradingPricesPrefixSquares)
                 .maxDequeues(maxDequeues)
                 .minDequeues(minDequeues)
-                .build());
+                .build();
     }
 
     private void updateSymbolTradingPriceData(List<Double> prices,
                                               TradingDataEntity tradingData) {
         final var tradingPrices = tradingData.tradingPrices();
-        final var tradingPricesPrefixSums = tradingData.tradingPricesPrefixSums();
-        final var tradingPricesPrefixSquares = tradingData.tradingPricesPrefixSquares();
+        final var prefixSums = tradingData.tradingPricesPrefixSums();
+        final var prefixSquares = tradingData.tradingPricesPrefixSquares();
 
-        final var startIndex = tradingPrices.size();
+        final var sum = prefixSums.getByIndex(prefixSums.currentIndex());
+        final var sumSq = prefixSquares.getByIndex(prefixSquares.currentIndex());
 
-        var lastSum = tradingPricesPrefixSums.getLast();
-        var lastSqSum = tradingPricesPrefixSquares.getLast();
-        addTradingPricingData(prices, tradingPrices, tradingPricesPrefixSums, tradingPricesPrefixSquares, lastSum, lastSqSum);
+        addTradingData(prices, tradingPrices, prefixSums, prefixSquares, sum, sumSq);
 
-        rangeClosed(1, maxKValue)
-                .map(MathUtils::powerOfTen)
-                .forEach(k -> {
-                    final var maxDeque = tradingData.maxDequeues().get(k);
-                    final var minDeque = tradingData.minDequeues().get(k);
+        final var lastIndex = tradingPrices.currentIndex();
 
-                    for (var i = 0; i < prices.size(); i++) {
-                        final var index = startIndex + i;
-                        updateDeque(maxDeque, tradingPrices, prices.get(i), index, k, true);
-                        updateDeque(minDeque, tradingPrices, prices.get(i), index, k, false);
-                    }
-                });
+        rangeClosed(1, maxKValue).map(MathUtils::powerOfTen).forEach(k -> {
+            final var maxDeque = tradingData.maxDequeues().get(k);
+            final var minDeque = tradingData.minDequeues().get(k);
+
+            for (var i = lastIndex - prices.size() + 1; i <= lastIndex; i++) {
+                updateDeque(maxDeque, tradingPrices, i, k, true);
+                updateDeque(minDeque, tradingPrices, i, k, false);
+            }
+        });
     }
 
-    private static void addTradingPricingData(List<Double> prices,
-                                              List<Double> tradingPrices,
-                                              List<Double> tradingPricesPrefixSums,
-                                              List<Double> tradingPricesPrefixSquares,
-                                              double sum,
-                                              double sumSq) {
+    private static void addTradingData(List<Double> prices,
+                                       DoubleRingBuffer tradingPrices,
+                                       DoubleRingBuffer prefixSums,
+                                       DoubleRingBuffer prefixSquares,
+                                       double sum,
+                                       double sumSq) {
         for (final var price : prices) {
-            tradingPrices.add(price);
             sum += price;
             sumSq += price * price;
-            tradingPricesPrefixSums.add(sum);
-            tradingPricesPrefixSquares.add(sumSq);
+            tradingPrices.add(price);
+            prefixSums.add(sum);
+            prefixSquares.add(sumSq);
         }
-    }
-
-    private static void initDeque(Deque<Integer> deque,
-                                  List<Double> prices,
-                                  int currentIndex,
-                                  int k,
-                                  boolean isMax) {
-        while (!deque.isEmpty() && deque.peekFirst() <= currentIndex - k) {
-            deque.pollFirst();
-        }
-
-        while (!deque.isEmpty() &&
-                ((isMax && prices.get(deque.peekLast()) <= prices.get(currentIndex)) ||
-                        (!isMax && prices.get(deque.peekLast()) >= prices.get(currentIndex)))) {
-            deque.pollLast();
-        }
-
-        deque.addLast(currentIndex);
     }
 
     private static void updateDeque(Deque<Integer> deque,
-                                    List<Double> prices,
-                                    double price,
+                                    DoubleRingBuffer prices,
                                     int currentIndex,
                                     int k,
                                     boolean isMax) {
-        while (!deque.isEmpty() && deque.peekFirst() <= currentIndex - k) {
-            deque.pollFirst();
-        }
+        synchronized (deque) {
+            while (!deque.isEmpty() && deque.peekFirst() <= currentIndex - k) {
+                deque.pollFirst();
+            }
 
-        while (!deque.isEmpty()
-                && ((isMax && prices.get(deque.peekLast()) <= price) || (!isMax && prices.get(deque.peekLast()) >= price))) {
-            deque.pollLast();
-        }
+            final var value = prices.getByIndex(currentIndex);
+            while (!deque.isEmpty()) {
+                final var last = deque.peekLast();
+                final var lastVal = prices.getByIndex(last);
 
-        deque.addLast(currentIndex);
+                if ((isMax && lastVal <= value) || (!isMax && lastVal >= value)) {
+                    deque.pollLast();
+                } else {
+                    break;
+                }
+            }
+
+            deque.addLast(currentIndex);
+        }
     }
 
     private void validateMaxSymbolAllowed() {

@@ -1,5 +1,6 @@
 package com.volodymyrkozlov.tradingdatamanager.service;
 
+import com.volodymyrkozlov.tradingdatamanager.repository.DoubleRingBuffer;
 import com.volodymyrkozlov.tradingdatamanager.repository.SymbolTradingDataRepository;
 import org.junit.jupiter.api.Test;
 
@@ -42,10 +43,17 @@ class SymbolFinancialDataServiceTest {
         var minDeques = new HashMap<Integer, Deque<Integer>>();
         minDeques.put(10, minDeque);
 
+        var tradingPrices = new DoubleRingBuffer(1);
+        tradingPrices.add(1);
+        var tradingPricesPrefixSums = new DoubleRingBuffer(1);
+        tradingPricesPrefixSums.add(1);
+        var tradingPricesPrefixSquares = new DoubleRingBuffer(1);
+        tradingPricesPrefixSquares.add(1);
+
         var tradingDataEntity = tradingDataEntityBuilder()
-                .tradingPrices(List.of(1.0))
-                .tradingPricesPrefixSums(List.of(1.0))
-                .tradingPricesPrefixSquares(List.of(1.0))
+                .tradingPrices(tradingPrices)
+                .tradingPricesPrefixSums(tradingPricesPrefixSums)
+                .tradingPricesPrefixSquares(tradingPricesPrefixSquares)
                 .maxDequeues(maxDeques)
                 .minDequeues(minDeques)
                 .build();

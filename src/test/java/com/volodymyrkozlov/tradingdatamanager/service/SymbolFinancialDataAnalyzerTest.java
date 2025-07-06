@@ -1,5 +1,6 @@
 package com.volodymyrkozlov.tradingdatamanager.service;
 
+import com.volodymyrkozlov.tradingdatamanager.repository.DoubleRingBuffer;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvFileSource;
@@ -12,8 +13,8 @@ import java.util.Map;
 
 import static com.volodymyrkozlov.tradingdatamanager.service.SymbolFinancialDataAnalyzer.averageTradingPrice;
 import static com.volodymyrkozlov.tradingdatamanager.service.SymbolFinancialDataAnalyzer.lastTradingPrice;
-import static com.volodymyrkozlov.tradingdatamanager.service.SymbolFinancialDataAnalyzer.minTradingPrice;
 import static com.volodymyrkozlov.tradingdatamanager.service.SymbolFinancialDataAnalyzer.maxTradingPrice;
+import static com.volodymyrkozlov.tradingdatamanager.service.SymbolFinancialDataAnalyzer.minTradingPrice;
 import static com.volodymyrkozlov.tradingdatamanager.service.SymbolFinancialDataAnalyzer.varianceTradingPrice;
 import static java.util.stream.Collectors.toCollection;
 import static org.assertj.core.api.AssertionsForInterfaceTypes.assertThat;
@@ -76,11 +77,10 @@ class SymbolFinancialDataAnalyzerTest {
                                 int k,
                                 Double expected) {
         // given
-        var tradingPrices = parseToList(tradingPricesInput);
         var tradingPricesPrefixSums = parseToList(tradingPricesPrefixSumsInput);
 
         // when
-        var averageTradingPrice = averageTradingPrice(tradingPrices, tradingPricesPrefixSums, k);
+        var averageTradingPrice = averageTradingPrice(tradingPricesPrefixSums, k);
 
         // then
         assertThat(averageTradingPrice).isEqualTo(expected);
@@ -108,34 +108,29 @@ class SymbolFinancialDataAnalyzerTest {
     @Test
     void throwsExceptionIfLastTradingHasEmptyInput() {
         // when
-        var exception = assertThrows(IllegalArgumentException.class, () -> lastTradingPrice(List.of()));
+        var exception = assertThrows(IllegalArgumentException.class, () -> lastTradingPrice(null));
 
         // then
-        assertThat(exception.getMessage()).isEqualTo("Trading prices don't contain at least one data");
+        assertThat(exception.getMessage()).isEqualTo("Trading data cannot be null");
     }
 
     @Test
     void throwsExceptionIfAverageInputDataHasDifferentSize() {
         // when
-        var exception = assertThrows(IllegalArgumentException.class, () -> averageTradingPrice(List.of(1.0), List.of(1.0, 2.0), 1));
+        var exception = assertThrows(IllegalArgumentException.class, () -> averageTradingPrice(null, 1));
 
         // then
-        assertThat(exception.getMessage()).isEqualTo("Trading prices collections must have the same size");
-    }
-
-    @Test
-    void throwsExceptionIfAverageInputDataHasEmptyInput() {
-        // when
-        var exception = assertThrows(IllegalArgumentException.class, () -> averageTradingPrice(List.of(), List.of(), 1));
-
-        // then
-        assertThat(exception.getMessage()).isEqualTo("Trading prices don't contain at least one data");
+        assertThat(exception.getMessage()).isEqualTo("Trading data cannot be null");
     }
 
     @Test
     void throwsExceptionIfVarianceInputDataHasDifferentSize() {
+        // given
+        var tradingPricesPrefixSquares = new DoubleRingBuffer(1);
+        tradingPricesPrefixSquares.add(1);
+
         // when
-        var exception = assertThrows(IllegalArgumentException.class, () -> varianceTradingPrice(List.of(1.0), List.of(1.0, 2.0), List.of(1.0), 1));
+        var exception = assertThrows(IllegalArgumentException.class, () -> varianceTradingPrice(new DoubleRingBuffer(1), new DoubleRingBuffer(1), tradingPricesPrefixSquares, 1));
 
         // then
         assertThat(exception.getMessage()).isEqualTo("Trading prices collections must have the same size");
@@ -143,17 +138,21 @@ class SymbolFinancialDataAnalyzerTest {
 
     @Test
     void throwsExceptionIfVarianceInputDataHasEmptyInput() {
+        // given
+        var tradingPricesPrefixSquares = new DoubleRingBuffer(1);
+        tradingPricesPrefixSquares.add(1);
+
         // when
-        var exception = assertThrows(IllegalArgumentException.class, () -> varianceTradingPrice(List.of(), List.of(), List.of(), 1));
+        var exception = assertThrows(IllegalArgumentException.class, () -> varianceTradingPrice(new DoubleRingBuffer(1), new DoubleRingBuffer(1), tradingPricesPrefixSquares, 1));
 
         // then
-        assertThat(exception.getMessage()).isEqualTo("Trading prices don't contain at least one data");
+        assertThat(exception.getMessage()).isEqualTo("Trading prices collections must have the same size");
     }
 
     @Test
     void throwsExceptionWhenMaxDequeDontContainProvidedKElement() {
         // when
-        var exception = assertThrows(IllegalArgumentException.class, () -> maxTradingPrice(List.of(1.0), Map.of(), 1));
+        var exception = assertThrows(IllegalArgumentException.class, () -> maxTradingPrice(new DoubleRingBuffer(1), Map.of(), 1));
 
         // then
         assertThat(exception.getMessage()).isEqualTo("Dequeues don't contain provided K 1");
@@ -162,7 +161,7 @@ class SymbolFinancialDataAnalyzerTest {
     @Test
     void throwsExceptionWhenMinDequeDontContainProvidedKElement() {
         // given
-        var exception = assertThrows(IllegalArgumentException.class, () -> minTradingPrice(List.of(1.0), Map.of(), 1));
+        var exception = assertThrows(IllegalArgumentException.class, () -> minTradingPrice(new DoubleRingBuffer(1), Map.of(), 1));
 
         // then
         assertThat(exception.getMessage()).isEqualTo("Dequeues don't contain provided K 1");
@@ -174,7 +173,7 @@ class SymbolFinancialDataAnalyzerTest {
         var maxDeque = new ArrayDeque<Integer>();
 
         // when
-        var exception = assertThrows(IllegalArgumentException.class, () -> maxTradingPrice(List.of(1.0), Map.of(1, maxDeque), 1));
+        var exception = assertThrows(IllegalArgumentException.class, () -> maxTradingPrice(new DoubleRingBuffer(1), Map.of(1, maxDeque), 1));
 
         // then
         assertThat(exception.getMessage()).isEqualTo("Deque for K 1 doesn't contain any data");
@@ -186,7 +185,7 @@ class SymbolFinancialDataAnalyzerTest {
         var minDeque = new ArrayDeque<Integer>();
 
         // when
-        var exception = assertThrows(IllegalArgumentException.class, () -> minTradingPrice(List.of(1.0), Map.of(1, minDeque), 1));
+        var exception = assertThrows(IllegalArgumentException.class, () -> minTradingPrice(new DoubleRingBuffer(1), Map.of(1, minDeque), 1));
 
         // then
         assertThat(exception.getMessage()).isEqualTo("Deque for K 1 doesn't contain any data");
@@ -199,7 +198,7 @@ class SymbolFinancialDataAnalyzerTest {
         maxDeque.add(2);
 
         // when
-        var exception = assertThrows(IllegalArgumentException.class, () -> maxTradingPrice(List.of(1.0), Map.of(1, maxDeque), 1));
+        var exception = assertThrows(IllegalArgumentException.class, () -> maxTradingPrice(new DoubleRingBuffer(1), Map.of(1, maxDeque), 1));
 
         // then
         assertThat(exception.getMessage()).isEqualTo("Trading prices don't contain index 2 from deque");
@@ -212,7 +211,7 @@ class SymbolFinancialDataAnalyzerTest {
         minDeque.add(2);
 
         // when
-        var exception = assertThrows(IllegalArgumentException.class, () -> minTradingPrice(List.of(1.0), Map.of(1, minDeque), 1));
+        var exception = assertThrows(IllegalArgumentException.class, () -> minTradingPrice(new DoubleRingBuffer(1), Map.of(1, minDeque), 1));
 
         // then
         assertThat(exception.getMessage()).isEqualTo("Trading prices don't contain index 2 from deque");
@@ -226,10 +225,13 @@ class SymbolFinancialDataAnalyzerTest {
                 .collect(toCollection(ArrayDeque::new));
     }
 
-    private static List<Double> parseToList(String input) {
-        return Arrays.stream(input.split(";"))
+    private static DoubleRingBuffer parseToList(String input) {
+        List<Double> list = Arrays.stream(input.split(";"))
                 .map(String::trim)
                 .map(Double::parseDouble)
                 .toList();
+        DoubleRingBuffer doubleRingBuffer = new DoubleRingBuffer(list.size());
+        list.forEach(doubleRingBuffer::add);
+        return doubleRingBuffer;
     }
 }
