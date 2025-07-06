@@ -17,8 +17,6 @@ import java.util.concurrent.ConcurrentLinkedDeque;
 import static com.volodymyrkozlov.tradingdatamanager.repository.TradingDataEntity.tradingDataEntityBuilder;
 import static com.volodymyrkozlov.tradingdatamanager.utils.MathUtils.powerOfTen;
 import static java.util.stream.Collectors.toCollection;
-import static java.util.stream.Collectors.toConcurrentMap;
-import static java.util.stream.IntStream.of;
 import static java.util.stream.IntStream.rangeClosed;
 
 @Repository

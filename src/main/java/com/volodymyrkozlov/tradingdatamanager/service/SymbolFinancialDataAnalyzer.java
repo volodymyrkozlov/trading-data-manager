@@ -9,11 +9,19 @@ import java.util.Optional;
 
 class SymbolFinancialDataAnalyzer {
 
+    /**
+     * Time complexity is O(n)
+     * Space complexity is O(n)
+     */
     static double lastTradingPrice(DoubleRingBuffer tradingPrices) {
         validateNotNull(tradingPrices);
         return tradingPrices.getByIndex(tradingPrices.currentIndex());
     }
 
+    /**
+     * Time complexity is O(n)
+     * Space complexity is O(n)
+     */
     static double averageTradingPrice(DoubleRingBuffer tradingPricesPrefixSums,
                                       int k) {
         validateNotNull(tradingPricesPrefixSums);
@@ -29,6 +37,10 @@ class SymbolFinancialDataAnalyzer {
         return (total - excluded) / elements;
     }
 
+    /**
+     * Time complexity is O(n)
+     * Space complexity is O(n)
+     */
     static double varianceTradingPrice(DoubleRingBuffer tradingPrices,
                                        DoubleRingBuffer tradingPricesPrefixSums,
                                        DoubleRingBuffer tradingPricesPrefixSquares,
@@ -59,12 +71,20 @@ class SymbolFinancialDataAnalyzer {
                 : sampleVariance(sumSq, sum, elements);
     }
 
+    /**
+     * Time complexity is O(n)
+     * Space complexity is O(n)
+     */
     static double minTradingPrice(DoubleRingBuffer prices,
                                   Map<Integer, Deque<Integer>> minDequeues,
                                   int k) {
         return resolveDequeStats(prices, minDequeues, k);
     }
 
+    /**
+     * Time complexity is O(n)
+     * Space complexity is O(n)
+     */
     static double maxTradingPrice(DoubleRingBuffer prices,
                                   Map<Integer, Deque<Integer>> maxDequeues,
                                   int k) {
