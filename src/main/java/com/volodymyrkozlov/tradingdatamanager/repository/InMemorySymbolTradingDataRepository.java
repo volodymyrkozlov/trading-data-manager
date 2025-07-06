@@ -49,8 +49,8 @@ public class InMemorySymbolTradingDataRepository implements SymbolTradingDataRep
                 synchronized (entity) {
                     updateSymbolTradingPriceData(prices, entity);
                 }
+                return entity;
             }
-            return entity;
         });
     }
 
@@ -139,25 +139,23 @@ public class InMemorySymbolTradingDataRepository implements SymbolTradingDataRep
                                     int currentIndex,
                                     int k,
                                     boolean isMax) {
-        synchronized (deque) {
-            while (!deque.isEmpty() && deque.peekFirst() <= currentIndex - k) {
-                deque.pollFirst();
-            }
-
-            final var value = prices.getByIndex(currentIndex);
-            while (!deque.isEmpty()) {
-                final var last = deque.peekLast();
-                final var lastVal = prices.getByIndex(last);
-
-                if ((isMax && lastVal <= value) || (!isMax && lastVal >= value)) {
-                    deque.pollLast();
-                } else {
-                    break;
-                }
-            }
-
-            deque.addLast(currentIndex);
+        while (!deque.isEmpty() && deque.peekFirst() <= currentIndex - k) {
+            deque.pollFirst();
         }
+
+        final var value = prices.getByIndex(currentIndex);
+        while (!deque.isEmpty()) {
+            final var last = deque.peekLast();
+            final var lastVal = prices.getByIndex(last);
+
+            if ((isMax && lastVal <= value) || (!isMax && lastVal >= value)) {
+                deque.pollLast();
+            } else {
+                break;
+            }
+        }
+
+        deque.addLast(currentIndex);
     }
 
     private void validateMaxSymbolAllowed() {
