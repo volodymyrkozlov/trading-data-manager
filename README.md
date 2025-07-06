@@ -12,7 +12,7 @@ Java 24 must be installed on the machine where this application is running
 
 ## Build
 
-To build **trading-data-manager** service application, run the following command. <br>
+To build **trading-data-manager** service application, run the following command: <br>
 `./gradlew build`<br>
 
 *It will run unit tests and install*
