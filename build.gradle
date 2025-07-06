@@ -27,3 +27,13 @@ dependencies {
 tasks.named('test') {
     useJUnitPlatform()
 }
+
+test {
+    minHeapSize = "4g"
+    maxHeapSize = "26g"
+    jvmArgs '-XX:+HeapDumpOnOutOfMemoryError', '-XshowSettings:vm'
+}
+
+bootRun {
+    jvmArgs = ['-Xms4g', '-Xmx26g', '-XX:+HeapDumpOnOutOfMemoryError']
+}

@@ -7,7 +7,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.core.io.ClassPathResource;
-import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.io.IOException;
@@ -18,7 +17,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@TestPropertySource(locations = "/application-test.yml")
 @SpringBootTest
 @AutoConfigureMockMvc
 public class FinancialDataControllerTest {
@@ -170,7 +168,7 @@ public class FinancialDataControllerTest {
         assertThat(eurStats3e.var()).isEqualTo(954.6676400034594);
 
         // verifies stats for last 5e{k}
-        var plnStats8e = objectMapper.readValue(mockMvc.perform(get("/stats/PLN/5"))
+        var plnStats8e = objectMapper.readValue(mockMvc.perform(get("/stats/PLN/8"))
                 .andExpect(status().isOk())
                 .andReturn()
                 .getResponse()
@@ -182,7 +180,7 @@ public class FinancialDataControllerTest {
         assertThat(plnStats8e.avg()).isEqualTo(48.165312500000034);
         assertThat(plnStats8e.var()).isEqualTo(875.9349774023399);
 
-        var uahStats8e = objectMapper.readValue(mockMvc.perform(get("/stats/UAH/5"))
+        var uahStats8e = objectMapper.readValue(mockMvc.perform(get("/stats/UAH/8"))
                 .andExpect(status().isOk())
                 .andReturn()
                 .getResponse()
@@ -194,7 +192,7 @@ public class FinancialDataControllerTest {
         assertThat(uahStats8e.avg()).isEqualTo(46.461999999999996);
         assertThat(uahStats8e.var()).isEqualTo(815.9876520000007);
 
-        var eurStats8e = objectMapper.readValue(mockMvc.perform(get("/stats/EUR/5"))
+        var eurStats8e = objectMapper.readValue(mockMvc.perform(get("/stats/EUR/8"))
                 .andExpect(status().isOk())
                 .andReturn()
                 .getResponse()
